@@ -1,0 +1,15 @@
+backend/
+├── controllers/
+│   └── authController.js
+├── middlewares/
+│   └── authMiddleware.js
+├── models/
+│   └── userModel.js
+├── routes/
+│   └── authRoutes.js
+├── config/
+│   └── db.js (pour la configuration de la connexion MongoDB)
+├── .env
+├── server.js (point d'entrée de l'application)
+└── package.json
+└── package-lock.json
