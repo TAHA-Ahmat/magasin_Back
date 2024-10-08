@@ -1,9 +1,11 @@
-const User = require('../models/userModel');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
+import User from '../models/userModel.js';  // Ajoutez .js pour les imports locaux
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';  // Utilisez jsonwebtoken pour l'import
+
+
 
 // Enregistrer un nouvel utilisateur
-exports.registerUser = async (req, res) => {
+export const registerUser = async (req, res) => {
   const { nom, email, mot_de_passe, role } = req.body;
 
   try {
@@ -40,7 +42,7 @@ exports.registerUser = async (req, res) => {
 };
 
 // Connexion utilisateur
-exports.loginUser = async (req, res) => {
+export const loginUser = async (req, res) => {
   const { email, mot_de_passe } = req.body;
 
   try {
@@ -76,7 +78,6 @@ exports.loginUser = async (req, res) => {
     res.status(500).json({ success: false, message: 'Erreur du serveur', error: err.message });
   }
 };
-
 
 
 /* 

@@ -6,6 +6,6 @@ const roleMiddleware = (roles) => { // roles est un tableau contenant les rôles
       next(); // Si le rôle est autorisé, passe à la prochaine fonction middleware ou au contrôleur
     };
   };
-  
-  module.exports = roleMiddleware; // Exporte la fonction middleware pour pouvoir l'utiliser dans d'autres fichiers
-  
+    
+
+  export default roleMiddleware;

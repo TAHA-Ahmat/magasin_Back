@@ -1,6 +1,7 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
-const { isEmail } = require('validator'); // Utilisation du validateur pour l'email
+import mongoose from 'mongoose'; // Import de Mongoose
+import bcrypt from 'bcrypt'; // Import de bcrypt
+import validator from 'validator'; // Import du module entier
+const { isEmail } = validator; // Extraire isEmail du module validator
 
 // Définir le schéma utilisateur
 const userSchema = new mongoose.Schema({
@@ -59,7 +60,11 @@ userSchema.methods.comparePassword = async function (enteredPassword) {
 
 // Créer et exporter le modèle utilisateur
 const User = mongoose.model('User', userSchema);
-module.exports = User;
+
+
+
+export default User;
+
 
 
 /*Explication du modèle 'Utilisateur'

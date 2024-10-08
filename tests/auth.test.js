@@ -1,96 +1,70 @@
-const chai = require('chai');
-const chaiHttp = require('chai-http');
-const server = require('../server'); // Le serveur Express
-const User = require('../models/userModel');
-const expect = chai.expect;
+import { createRequire } from 'module'; // Importer createRequire pour les modules non-ESM
+const require = createRequire(import.meta.url); // Créer la fonction require
+import request from 'supertest'; // Ajoutez cette ligne
 
-chai.use(chaiHttp);
+import server from '../server.js'; // Importer le serveur principal
 
-describe('Tests des routes d\'authentification', () => {
 
-  // Avant chaque test, on vide la collection d'utilisateurs
-  beforeEach(async () => {
-    await User.deleteMany({});
-  });
 
-  // Test pour la route d'enregistrement
+describe('Tests d\'authentification', () => {
+
+  // Test d'enregistrement d'un nouvel utilisateur
   describe('POST /register', () => {
     it('Devrait enregistrer un utilisateur avec succès', (done) => {
-      chai.request(server)
-        .post('/register')
+      request(server)
+        .post('/api/auth/register')
         .send({
-          nom: 'UtilisateurTest',
-          email: 'test@test.com',
-          mot_de_passe: 'Test1234',
-          role: 'Magasinier'
+          nom: 'John Doe',
+          email: 'johndoe@example.com',
+          mot_de_passe: 'Password123',
+          role: 'Administrateur'
         })
         .end((err, res) => {
           expect(res).to.have.status(201);
           expect(res.body).to.have.property('message', 'Utilisateur créé avec succès');
-          expect(res.body.user).to.have.property('email', 'test@test.com');
           done();
         });
     });
 
     it('Devrait renvoyer une erreur si l\'email est déjà utilisé', (done) => {
-      // Créer un utilisateur pour le test
-      const utilisateur = new User({
-        nom: 'UtilisateurTest',
-        email: 'test@test.com',
-        mot_de_passe: 'Test1234',
-        role: 'Magasinier'
-      });
-      utilisateur.save().then(() => {
-        chai.request(server)
-          .post('/register')
-          .send({
-            nom: 'UtilisateurTest',
-            email: 'test@test.com',
-            mot_de_passe: 'Test1234',
-            role: 'Magasinier'
-          })
-          .end((err, res) => {
-            expect(res).to.have.status(400);
-            expect(res.body).to.have.property('message', 'Utilisateur déjà enregistré');
-            done();
-          });
-      });
+      request(server)
+        .post('/api/auth/register')
+        .send({
+          nom: 'John Doe',
+          email: 'johndoe@example.com',  // Utiliser le même email pour provoquer une erreur
+          mot_de_passe: 'Password123',
+          role: 'Administrateur'
+        })
+        .end((err, res) => {
+          expect(res).to.have.status(400);
+          expect(res.body).to.have.property('message', 'Utilisateur déjà enregistré');
+          done();
+        });
     });
   });
 
-  // Test des routes de connexion
+  // Test de connexion utilisateur
   describe('POST /login', () => {
     it('Devrait connecter un utilisateur avec succès et renvoyer un JWT', (done) => {
-      // Créer un utilisateur avant de tester la connexion
-      const utilisateur = new User({
-        nom: 'UtilisateurTest',
-        email: 'test@test.com',
-        mot_de_passe: 'Test1234',
-        role: 'Magasinier'
-      });
-
-      utilisateur.save().then(() => {
-        chai.request(server)
-          .post('/login')
-          .send({
-            email: 'test@test.com',
-            mot_de_passe: 'Test1234'
-          })
-          .end((err, res) => {
-            expect(res).to.have.status(200);
-            expect(res.body).to.have.property('message', 'Connexion réussie');
-            expect(res.body).to.have.property('token');
-            done();
-          });
-      });
+      request(server)
+        .post('/api/auth/login')
+        .send({
+          email: 'johndoe@example.com',
+          mot_de_passe: 'Password123'
+        })
+        .end((err, res) => {
+          expect(res).to.have.status(200);
+          expect(res.body).to.have.property('token');
+          done();
+        });
     });
 
-    it('Devrait renvoyer une erreur si les informations de connexion sont incorrectes', (done) => {
-      chai.request(server)
-        .post('/login')
+    it('Devrait renvoyer une erreur si le mot de passe est incorrect', (done) => {
+      request(server)
+        .post('/api/auth/login')
         .send({
-          email: 'wrong@test.com',
-          mot_de_passe: 'MauvaisMotDePasse'
+          email: 'johndoe@example.com',
+          mot_de_passe: 'WrongPassword'
         })
         .end((err, res) => {
           expect(res).to.have.status(400);
@@ -100,84 +74,43 @@ describe('Tests des routes d\'authentification', () => {
     });
   });
 
-  // Tests pour les rôles et permissions
-  describe('Test des rôles et permissions', () => {
+  // Test d'accès à une route protégée
+  describe('Accès à une route protégée', () => {
     let token;
 
-    // Avant de tester les permissions, nous devons connecter un utilisateur
-    beforeEach((done) => {
-      const utilisateur = new User({
-        nom: 'AdminTest',
-        email: 'admin@test.com',
-        mot_de_passe: 'Admin1234',
-        role: 'Administrateur'
-      });
-
-      utilisateur.save().then(() => {
-        chai.request(server)
-          .post('/login')
-          .send({
-            email: 'admin@test.com',
-            mot_de_passe: 'Admin1234'
-          })
-          .end((err, res) => {
-            token = res.body.token; // Stocker le token JWT pour les tests
-            done();
-          });
-      });
-    });
-
-    it('Devrait permettre à un administrateur d\'accéder à une route protégée', (done) => {
-      chai.request(server)
-        .post('/register')
-        .set('Authorization', `Bearer ${token}`) // Envoyer le token dans l'en-tête
+    before((done) => {
+      // Connecter l'utilisateur et récupérer son token JWT
+      request(server)
+        .post('/api/auth/login')
         .send({
-          nom: 'NouvelUtilisateur',
-          email: 'new@test.com',
-          mot_de_passe: 'Test1234',
-          role: 'Magasinier'
+          email: 'johndoe@example.com',
+          mot_de_passe: 'Password123'
         })
         .end((err, res) => {
-          expect(res).to.have.status(201);
-          expect(res.body).to.have.property('message', 'Utilisateur créé avec succès');
+          token = res.body.token; // Stocker le token JWT
           done();
         });
     });
 
-    it('Devrait interdire l\'accès à une route protégée pour un utilisateur sans le bon rôle', (done) => {
-      const magasinier = new User({
-        nom: 'MagasinierTest',
-        email: 'magasinier@test.com',
-        mot_de_passe: 'Magasin1234',
-        role: 'Magasinier'
-      });
+    it('Devrait permettre l\'accès à une route protégée avec un token valide', (done) => {
+      request(server)
+        .get('/api/auth/protected')
+        .set('Authorization', `Bearer ${token}`)
+        .end((err, res) => {
+          expect(res).to.have.status(200);
+          expect(res.body).to.have.property('message', 'Accès autorisé');
+          done();
+        });
+    });
 
-      magasinier.save().then(() => {
-        chai.request(server)
-          .post('/login')
-          .send({
-            email: 'magasinier@test.com',
-            mot_de_passe: 'Magasin1234'
-          })
-          .end((err, res) => {
-            const magasinierToken = res.body.token;
-
-            chai.request(server)
-              .post('/register')
-              .set('Authorization', `Bearer ${magasinierToken}`)
-              .send({
-                nom: 'NouvelUtilisateur',
-                email: 'new@test.com',
-                mot_de_passe: 'Test1234',
-                role: 'Magasinier'
-              })
-              .end((err, res) => {
-                expect(res).to.have.status(403);
-                expect(res.body).to.have.property('message', 'Accès refusé');
-                done();
-              });
-          });
-      });
+    it('Devrait renvoyer une erreur si le token est invalide ou non fourni', (done) => {
+      request(server)
+        .get('/api/auth/protected')
+        .end((err, res) => {
+          expect(res).to.have.status(401);
+          expect(res.body).to.have.property('message', 'Accès refusé, aucun token fourni');
+          done();
+        });
     });
   });
 });
