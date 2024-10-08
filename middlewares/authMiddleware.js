@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken';
 
 const authMiddleware = (req, res, next) => {
-  // Récupérer le token à partir des headers
   const token = req.header('Authorization')?.split(' ')[1];
 
   if (!token) {
@@ -9,17 +8,12 @@ const authMiddleware = (req, res, next) => {
   }
 
   try {
-    // Vérifier le token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Attacher l'utilisateur décodé à la requête
-    req.user = decoded;
-
+    req.user = decoded; // Attacher l'utilisateur décodé à la requête
     next();
   } catch (err) {
     res.status(400).json({ message: 'Token invalide' });
   }
 };
 
-// Exporter authMiddleware par défaut
 export default authMiddleware;

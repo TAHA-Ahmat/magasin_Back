@@ -1,25 +1,26 @@
-import express from 'express'; // Utilisez import au lieu de require
+import express from 'express';
 import dotenv from 'dotenv';
-import connectDB from './config/db.js'; // Notez l'extension .js pour les imports locaux
+import connectDB from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
-// Load environment variables
-dotenv.config();
+import commandeRoutes from './routes/commandeRoutes.js'; // Importer les routes de commande
 
-// Connect to MongoDB
+dotenv.config();
 connectDB();
 
 const app = express();
-
-// Middleware for parsing JSON
 app.use(express.json());
 
-// Utilisation des routes d'authentification sous /api/auth
+// Utilisation des routes
 app.use('/api/auth', authRoutes);
+app.use('/api/commandes', commandeRoutes); // Ajouter les routes de commande
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+const TEST_PORT = process.env.TEST_PORT || 5001;
 
+const portToUse = process.env.NODE_ENV === 'test' ? TEST_PORT : PORT;
+
+app.listen(portToUse, () => {
+  console.log(`Server running on port ${portToUse}`);
+});
 
 export default app;
