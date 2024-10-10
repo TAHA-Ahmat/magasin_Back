@@ -22,8 +22,8 @@ const commandeSchema = new mongoose.Schema({
   ],
   statut: {
     type: String,
-    enum: ['Soumise', 'Validée', 'Rejetée', 'En révision'],
-    default: 'Soumise' // Statut par défaut
+    enum: ['Non Soumise', 'Soumise', 'Validée', 'Rejetée', 'En révision'], // Ajoutez 'Non Soumise' comme statut par défaut
+    default: 'Non Soumise' // Statut par défaut
   },
   date_creation: {
     type: Date,
