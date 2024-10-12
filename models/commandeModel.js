@@ -32,7 +32,12 @@ const commandeSchema = new mongoose.Schema({
   montant_total: {
     type: Number,
     default: 0 // Le montant total sera calculé automatiquement
+  },
+  date_archivage: {
+    type: Date,
+    default: null,  // Ce champ sera rempli lors de l'archivage ou lors de l'import d'un ancien bon.
   }
+
 });
 
 // Méthode pour calculer le montant total (à appeler lors de la création ou mise à jour de la commande)

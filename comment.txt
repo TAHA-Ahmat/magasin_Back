@@ -1,15 +1,58 @@
+Arborescence du projet :
+
 backend/
 ├── controllers/
-│   └── authController.js
-├── middlewares/
-│   └── authMiddleware.js
+│   ├── authController.js          # Gère l'authentification des utilisateurs
+│   ├── commandeController.js      # Gère les commandes, génération de PDF/Excel, archivage
+│   ├── stockController.js         # Gère les stocks (entrées, sorties)
+│   ├── adminController.js         # Gère les rôles et permissions des utilisateurs
 ├── models/
-│   └── userModel.js
+│   ├── userModel.js               # Modèle utilisateur avec rôles
+│   ├── commandeModel.js           # Modèle commande avec produits, statut, montant total
+│   ├── produitModel.js            # Modèle produit pour gérer les produits en stock
+│   ├── stockModel.js              # Modèle stock pour suivre les entrées et sorties de stock
+│   ├── journalCommandeModel.js    # Journal des commandes pour suivre les changements de statuts
 ├── routes/
-│   └── authRoutes.js
+│   ├── authRoutes.js              # Routes pour l'authentification des utilisateurs
+│   ├── commandeRoutes.js          # Routes pour les commandes (création, validation, archivage, rapports)
+│   ├── stockRoutes.js             # Routes pour les stocks (entrées, sorties, alertes)
+│   ├── adminRoutes.js             # Routes pour la gestion des rôles et permissions
+├── services/
+│   ├── notificationService.js     # Service pour envoyer les notifications par mail
 ├── config/
-│   └── db.js (pour la configuration de la connexion MongoDB)
-├── .env
-├── server.js (point d'entrée de l'application)
-└── package.json
-└── package-lock.json
+│   └── db.js                      # Configuration de la connexion à MongoDB
+├── middlewares/
+│   ├── authMiddleware.js          # Middleware d'authentification
+│   ├── roleMiddleware.js          # Middleware pour la gestion des rôles des utilisateurs
+├── uploads/                       # Dossier pour stocker les fichiers téléchargés (ex : bon de commande Excel)
+├── .env                           # Variables d'environnement (configurations sensibles)
+├── .gitignore                     # Fichiers et dossiers à ignorer par Git
+├── package.json                   # Fichier de configuration des dépendances et scripts Node.js
+├── package-lock.json              # Liste des dépendances exactes installées
+├── server.js                      # Point d'entrée principal du serveur (démarre l'application)
+└── README.md                      # Documentation du projet (à remplir)
+
+
+
+
+US Numéro___	Description___	Statut___	Remarques
+US 1___	Création de bon de commande par le magasinier	___COUVERT___	Fonctionnalité implémentée, avec gestion des produits et soumission.
+US 2___	Validation des commandes par le comptable	___COUVERT___	Comptable peut valider ou rejeter des commandes.
+US 3___	Demande de modification de commande par le comptable	___COUVERT___	Le comptable peut renvoyer une commande avec des commentaires.
+US 4___	Archivage des bons validés	___COUVERT___	Les commandes validées sont automatiquement archivées.
+US 5___	Impression des bons validés	___COUVERT___	Génération de PDF et d'Excel pour les bons validés.
+US 6___	Audit initial du stock par le magasinier	___COUVERT___	Le magasinier peut enregistrer manuellement les quantités présentes dans le stock.
+US 7___	Suivi des entrées de produits en stock	___COUVERT___	Entrées en stock enregistrées et mises à jour.
+US 8___	Suivi des sorties de produits et affectation	___COUVERT___	Le magasinier peut enregistrer les sorties et affecter les produits aux utilisateurs.
+US 9___	Alerte de stock critique	___COUVERT___	Notifications envoyées lorsque le stock atteint un seuil critique.
+US 10___	Consultation de l’historique des commandes	___COUVERT___	Les utilisateurs peuvent consulter l'historique des commandes avec des filtres.
+US 11___	Consultation des bons archivés	___COUVERT___	Les bons validés sont archivés et consultables par période et produit.
+US 12___	Génération de rapports par période pour la direction	___COUVERT___	La direction peut générer des rapports de performance par période.
+US 13___	Notification de validation ou rejet d'une commande	___COUVERT___	Notifications envoyées aux utilisateurs pour chaque validation, rejet ou révision de commande.
+US 14___	Notification de stock critique	___COUVERT___	Notifications envoyées au magasinier en cas de stock critique.
+US 15___	Notification de création de commande	___COUVERT___	Notification envoyée au comptable lors de la soumission d'une commande.
+US 16___	Gestion des permissions des utilisateurs	___COUVERT___	L'administrateur peut attribuer, modifier ou révoquer des rôles.
+US 17___	Consultation des actions des utilisateurs	___COUVERT___	Journal des actions des utilisateurs disponible pour l'administrateur.
+US 18___	Archivage manuel des commandes passées	___COUVERT___	L'administrateur peut ajouter manuellement des anciens bons pour archivage.
+US 19___	Statistiques des bons de commande créés et validés	___COUVERT___	Le comptable peut voir des statistiques sur les commandes créées et validées par période.
+US 20___	Statistiques des commandes par statut	___COUVERT___	Le magasinier peut consulter le nombre de commandes en attente, validées, et rejetées par période.

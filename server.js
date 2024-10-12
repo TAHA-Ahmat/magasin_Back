@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import connectDB from './config/db.js';
+import cors from 'cors'; // Importer cors en utilisant 'import'
 import authRoutes from './routes/authRoutes.js';
 import commandeRoutes from './routes/commandeRoutes.js'; // Importer les routes de commande
 
@@ -9,6 +10,9 @@ connectDB();
 
 const app = express();
 app.use(express.json());
+
+// Autoriser toutes les origines
+app.use(cors());
 
 // Utilisation des routes
 app.use('/api/auth', authRoutes);

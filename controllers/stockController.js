@@ -2,6 +2,7 @@ import Stock from '../models/stockModel.js';
 import Produit from '../models/produitModel.js'; 
 import User from '../models/userModel.js'; // Importer le modèle User pour vérifier l'utilisateur
 import JournalCommande from '../models/journalCommandeModel.js'; // Utiliser le même journal pour enregistrer les entrées et sorties de stock
+import { sendNotification } from '../services/notificationService.js';  // Importer le service de notification
 
 // Middleware pour gérer les erreurs
 const handleError = (res, err, message = 'Erreur inconnue') => {
@@ -11,91 +12,101 @@ const handleError = (res, err, message = 'Erreur inconnue') => {
 
 // Ajouter des produits au stock (entrée de stock)
 export const addStock = async (req, res) => {
-  const { id_produit, quantite } = req.body; // Obtenir les données de la requête
+  const { id_produit, quantite } = req.body;
 
   try {
-    // Vérifier si le produit existe
     const produit = await Produit.findById(id_produit);
     if (!produit) {
       return res.status(404).json({ message: 'Produit non trouvé.' });
     }
 
-    // Créer ou mettre à jour l'entrée de stock
     let stock = await Stock.findOne({ id_produit });
     if (stock) {
-      stock.quantite_disponible += quantite; // Mettre à jour la quantité
-      stock.date_mise_a_jour = Date.now(); // Mettre à jour la date
+      stock.quantite_disponible += quantite;
+      stock.date_mise_a_jour = Date.now();
     } else {
       stock = new Stock({
         id_produit,
         quantite_disponible: quantite,
-        date_mise_a_jour: Date.now(),
+        date_mise_a_jour: Date.now()
       });
     }
 
-    await stock.save(); // Enregistrer les modifications
+    await stock.save();
 
-    // Journaliser l'entrée en stock
+    // Journalisation de l'entrée de stock
     const journalEntry = new JournalCommande({
-      commandeId: null,  // Pas de lien avec une commande dans ce cas
-      utilisateurId: req.user.id,  // Magasinier effectuant l'entrée
-      ancienStatut: `Stock avant entrée: ${stock.quantite_disponible - quantite}`,
-      nouveauStatut: `Stock après entrée: ${stock.quantite_disponible}`,
-      commentaire: `Entrée de ${quantite} unités du produit ${produit.nom}.`,
+      commandeId: null,  // Ce n'est pas lié à une commande spécifique
+      utilisateurId: req.user.id,  // ID du magasinier qui ajoute au stock
+      ancienStatut: 'Entrée de stock',
+      nouveauStatut: 'Stock mis à jour',
+      commentaire: `Ajout de ${quantite} unités au stock du produit ${produit.nom}`,
+      dateChangement: new Date(),
     });
 
-    await journalEntry.save();
+    await journalEntry.save();  // Sauvegarder l'entrée du journal
+
+    if (stock.quantite_disponible <= produit.seuil_critique) {
+      const magasinier = await User.findById(req.user.id);
+      await sendNotification(
+        magasinier.email,
+        'Alerte de stock critique',
+        `Le stock du produit ${produit.nom} a atteint son seuil critique (${produit.seuil_critique} unités restantes).`
+      );
+    }
 
     res.status(200).json({ message: 'Stock mis à jour avec succès', stock });
   } catch (err) {
-    handleError(res, err, 'Erreur lors de la mise à jour du stock');
+    handleError(res, err, 'Erreur lors de l\'ajout au stock');
   }
 };
 
 // Retirer des produits du stock (sortie de stock)
 export const removeStock = async (req, res) => {
-  const { id_produit, quantite, utilisateurId } = req.body; // Récupérer l'utilisateur recevant les produits
+  const { id_produit, quantite, utilisateurId } = req.body;
 
   try {
-    // Vérifier si le produit existe dans le stock
     const stock = await Stock.findOne({ id_produit });
     if (!stock) {
       return res.status(404).json({ message: 'Produit non trouvé dans le stock.' });
     }
 
-    // Vérifier si la quantité demandée est disponible
     if (stock.quantite_disponible < quantite) {
       return res.status(400).json({ message: 'Quantité demandée supérieure à la quantité disponible.' });
     }
 
-    // Vérifier si l'utilisateur existe
+    stock.quantite_disponible -= quantite;
+    stock.date_mise_a_jour = Date.now();
+
+    await stock.save();
+
     const utilisateur = await User.findById(utilisateurId);
     if (!utilisateur) {
       return res.status(404).json({ message: 'Utilisateur non trouvé.' });
     }
 
-    // Mettre à jour la quantité de stock
-    stock.quantite_disponible -= quantite;
-    stock.date_mise_a_jour = Date.now(); 
+    // Envoyer une notification à l'utilisateur recevant les produits
+    await sendNotification(
+      utilisateur.email,
+      'Produits affectés à votre compte',
+      `Vous avez reçu ${quantite} unités du produit ${stock.id_produit}.`
+    );
 
-    await stock.save(); // Enregistrer les modifications dans le stock
-
-    // Journaliser la sortie de stock
+    // Journalisation de la sortie de stock
     const journalEntry = new JournalCommande({
-      commandeId: null,  // Pas de lien avec une commande
-      utilisateurId: req.user.id,  // Magasinier effectuant la sortie
-      ancienStatut: `Stock avant sortie: ${stock.quantite_disponible + quantite}`,
-      nouveauStatut: `Stock après sortie: ${stock.quantite_disponible}`,
-      commentaire: `Sortie de ${quantite} unités du produit ${stock.id_produit} affecté à l'utilisateur ${utilisateur.nom}.`,
+      commandeId: null,  // Ce n'est pas lié à une commande spécifique
+      utilisateurId: req.user.id,  // ID du magasinier ou administrateur qui retire du stock
+      ancienStatut: 'Sortie de stock',
+      nouveauStatut: 'Stock mis à jour',
+      commentaire: `Retrait de ${quantite} unités du stock du produit ${stock.id_produit}`,
+      dateChangement: new Date(),
     });
 
-    await journalEntry.save();
-
-    // Notification à l'utilisateur recevant les produits (rappel pour implémenter cette fonction)
-    // notifyUser(utilisateurId, `Vous avez reçu ${quantite} unités du produit ${stock.id_produit}.`);
+    await journalEntry.save();  // Sauvegarder l'entrée du journal
 
     res.status(200).json({ message: 'Stock mis à jour avec succès et produit affecté à l\'utilisateur', stock });
   } catch (err) {
-    handleError(res, err, 'Erreur lors de la mise à jour du stock');
+    handleError(res, err, 'Erreur lors de la sortie du stock');
   }
 };
+
