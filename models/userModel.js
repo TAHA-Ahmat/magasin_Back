@@ -47,11 +47,14 @@ userSchema.pre('save', async function (next) {
   try {
     const salt = await bcrypt.genSalt(10);
     user.mot_de_passe = await bcrypt.hash(user.mot_de_passe, salt);
+    console.log(`Mot de passe pour l'utilisateur ${user.nom} haché avec succès`);  // Ajout de journalisation
     next();
   } catch (err) {
+    console.error('Erreur lors du hachage du mot de passe :', err);  // Ajout de journalisation en cas d'erreur
     next(err);
   }
 });
+
 
 // Comparer le mot de passe lors de la connexion
 userSchema.methods.comparePassword = async function (enteredPassword) {

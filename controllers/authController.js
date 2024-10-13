@@ -74,6 +74,7 @@ export const createUser = async (req, res) => {
   }
 };
 
+//Fonction pour inscrire
 export const registerUser = async (req, res) => {
   const { nom, email, mot_de_passe, role } = req.body;
 
@@ -91,7 +92,7 @@ export const registerUser = async (req, res) => {
   }
 };
 
-// Connexion utilisateur
+// Connexion utilisateur (backend)
 export const loginUser = async (req, res) => {
   const { email, mot_de_passe } = req.body;
 
@@ -102,10 +103,10 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email ou mot de passe incorrect' });
     }
 
-    // Comparer les mots de passe
+    // Comparer les mots de passe hachés
     const isMatch = await bcrypt.compare(mot_de_passe, user.mot_de_passe);
     if (!isMatch) {
-      return res.status(400).json({ success: false, message: 'Email ou mot de passe incorrect' });
+      return res.status(400).json({ message: 'Mot de passe incorrect.' });
     }
 
     // Générer un token JWT
@@ -113,6 +114,7 @@ export const loginUser = async (req, res) => {
       expiresIn: '1d',
     });
 
+    // Répondre avec le token et les informations utilisateur
     res.status(200).json({
       success: true,
       message: 'Connexion réussie',
@@ -128,6 +130,7 @@ export const loginUser = async (req, res) => {
     res.status(500).json({ success: false, message: 'Erreur du serveur', error: err.message });
   }
 };
+
 
 export const updateUserRole = async (req, res) => {
   const { id } = req.params;
@@ -155,16 +158,3 @@ export const updateUserRole = async (req, res) => {
     handleError(res, err, 'Erreur lors de la mise à jour du rôle');
   }
 };
-
-/* 
-registerUser :
-Ce contrôleur gère l'inscription d'un nouvel utilisateur.
-Il vérifie d'abord si l'utilisateur existe déjà avec l'email fourni.
-Si non, il crée un nouvel utilisateur, hache le mot de passe avec le pré-enregistrement de Mongoose (voir étape précédente), et génère un token JWT.
-La réponse inclut le token et les détails de l'utilisateur.
-loginUser :
-Ce contrôleur gère la connexion d'un utilisateur existant.
-Il vérifie si l'email est associé à un utilisateur dans la base de données.
-Ensuite, il compare le mot de passe fourni avec celui haché dans la base de données à l'aide de bcrypt.
-Si les informations d'identification sont correctes, il génère un token JWT et le renvoie avec les informations de l'utilisateur.
-*/
