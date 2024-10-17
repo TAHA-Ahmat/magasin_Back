@@ -5,18 +5,23 @@ import {
   createCommande, 
   getCommandes, 
   validateCommande, 
-  updateCommande, 
-  getCommandesHistorique, 
-  getCommandesArchivees,
-  generateCommandePDF,      // Route pour générer un PDF du bon validé (US 5)
-  generateCommandeExcel,     // Route pour générer un fichier Excel du bon validé (nouveau)
-  generateRapportParPeriode, // Génération de rapports par période
-  getStatistiquesBons,       // Générer des statistiques pour les bons
-  getStatistiquesCommandes   // Générer des statistiques pour les commandes
+  getMagasinierOrders,
+  getComptableOrders,
+  cancelOrderMagasin,
+  modifyOrderMagasin,
+   // Importer la nouvelle fonction pour récupérer les commandes du magasinier
+  // updateCommande, 
+  // getCommandesHistorique, 
+  // getCommandesArchivees,
+  // generateCommandePDF,      // Route pour générer un PDF du bon validé (US 5)
+  // generateCommandeExcel,     // Route pour générer un fichier Excel du bon validé (nouveau)
+  // generateRapportParPeriode, // Génération de rapports par période
+  // getStatistiquesBons,       // Générer des statistiques pour les bons
+  // getStatistiquesCommandes   // Générer des statistiques pour les commandes
 } from '../controllers/commandeController.js';
 
 import multer from 'multer';  // Importer multer
-import ExcelJS from 'exceljs'; // Importer ExcelJS pour la gestion des fichiers Excel
+// import ExcelJS from 'exceljs'; // Importer ExcelJS pour la gestion des fichiers Excel
 
 const router = express.Router();
 
@@ -35,49 +40,60 @@ const upload = multer({ storage: storage });
 
 // Routes principales
 router.post('/commandes', authMiddleware, roleMiddleware(['Magasinier']), createCommande);
+router.get('/commandes/comptable', authMiddleware, getComptableOrders);
 router.get('/commandes', authMiddleware, getCommandes);
+
+
+// Routes commentées car non utilisées pour le moment
 router.post('/commandes/:id/validate', authMiddleware, roleMiddleware(['Comptable']), validateCommande);
-router.put('/commandes/:id/update', authMiddleware, roleMiddleware(['Magasinier']), updateCommande);
-router.get('/historique', authMiddleware, roleMiddleware(['Magasinier']), getCommandesHistorique);
-router.get('/archives', authMiddleware, roleMiddleware(['Comptable']), getCommandesArchivees);
+// Nouvelle route pour récupérer les commandes du magasinier
+router.get('/commandes/magasinier', authMiddleware, roleMiddleware(['Magasinier']), getMagasinierOrders);
+// Nouvelle route pour récupérer les commandes du COMPTABLE
+router.post('/commandes/:id/cancel', authMiddleware, roleMiddleware(['Magasinier']), cancelOrderMagasin);
+// Route pour modifier une commande MAGASIN
+router.put('/commandes/:id/update', authMiddleware, roleMiddleware(['Magasinier']), modifyOrderMagasin);
+
+
+// router.get('/historique', authMiddleware, roleMiddleware(['Magasinier']), getCommandesHistorique);
+// router.get('/archives', authMiddleware, roleMiddleware(['Comptable']), getCommandesArchivees);
 
 // Routes pour la génération des rapports et des fichiers
-router.get('/commandes/:id/pdf', authMiddleware, roleMiddleware(['Magasinier', 'Comptable']), generateCommandePDF);
-router.get('/commandes/:id/excel', authMiddleware, roleMiddleware(['Magasinier', 'Comptable']), generateCommandeExcel);
-router.get('/rapports', authMiddleware, roleMiddleware(['Direction']), generateRapportParPeriode);
-router.get('/statistiques-bons', authMiddleware, roleMiddleware(['Comptable']), getStatistiquesBons);
-router.get('/statistiques-commandes', authMiddleware, roleMiddleware(['Magasinier']), getStatistiquesCommandes);
+// router.get('/commandes/:id/pdf', authMiddleware, roleMiddleware(['Magasinier', 'Comptable']), generateCommandePDF);
+// router.get('/commandes/:id/excel', authMiddleware, roleMiddleware(['Magasinier', 'Comptable']), generateCommandeExcel);
+// router.get('/rapports', authMiddleware, roleMiddleware(['Direction']), generateRapportParPeriode);
+// router.get('/statistiques-bons', authMiddleware, roleMiddleware(['Comptable']), getStatistiquesBons);
+// router.get('/statistiques-commandes', authMiddleware, roleMiddleware(['Magasinier']), getStatistiquesCommandes);
 
 // Route pour uploader un bon de commande (exemple d'upload de fichier)
-router.post('/upload-bon-commande', authMiddleware, roleMiddleware(['Comptable']), upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: 'Aucun fichier n\'a été téléchargé.' });
-    }
+// router.post('/upload-bon-commande', authMiddleware, roleMiddleware(['Comptable']), upload.single('file'), async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({ success: false, message: 'Aucun fichier n\'a été téléchargé.' });
+//     }
 
-    // Logique après téléchargement du fichier (par exemple, traitement du fichier)
-    res.status(200).json({ success: true, message: 'Fichier téléchargé avec succès', file: req.file });
-  } catch (err) {
-    res.status(500).json({ success: false, message: 'Erreur lors du téléchargement du fichier', error: err.message });
-  }
-});
+//     // Logique après téléchargement du fichier (par exemple, traitement du fichier)
+//     res.status(200).json({ success: true, message: 'Fichier téléchargé avec succès', file: req.file });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: 'Erreur lors du téléchargement du fichier', error: err.message });
+//   }
+// });
 
 // Route pour récupérer les commandes archivées
-router.get('/archivees', authMiddleware, roleMiddleware(['Comptable']), async (req, res) => {
-  const { dateDebut, dateFin } = req.query;
+// router.get('/archivees', authMiddleware, roleMiddleware(['Comptable']), async (req, res) => {
+//   const { dateDebut, dateFin } = req.query;
 
-  try {
-    const filters = { statut: 'Validée' };
+//   try {
+//     const filters = { statut: 'Validée' };
 
-    if (dateDebut && dateFin) {
-      filters.date_archivage = { $gte: new Date(dateDebut), $lte: new Date(dateFin) };
-    }
+//     if (dateDebut && dateFin) {
+//       filters.date_archivage = { $gte: new Date(dateDebut), $lte: new Date(dateFin) };
+//     }
 
-    const commandesArchivees = await Commande.find(filters);
-    res.status(200).json({ success: true, commandesArchivees });
-  } catch (err) {
-    handleError(res, err, 'Erreur lors de la récupération des commandes archivées.');
-  }
-});
+//     const commandesArchivees = await Commande.find(filters);
+//     res.status(200).json({ success: true, commandesArchivees });
+//   } catch (err) {
+//     handleError(res, err, 'Erreur lors de la récupération des commandes archivées.');
+//   }
+// });
 
 export default router;

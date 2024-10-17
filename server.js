@@ -16,7 +16,7 @@ app.use(cors());
 
 // Utilisation des routes
 app.use('/api/auth', authRoutes);
-app.use('/api/commandes', commandeRoutes); // Ajouter les routes de commande
+app.use('/api', commandeRoutes); // Ajouter les routes de commande
 
 const PORT = process.env.PORT || 5000;
 const TEST_PORT = process.env.TEST_PORT || 5001;

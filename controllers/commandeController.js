@@ -2,10 +2,6 @@ import Commande from '../models/commandeModel.js';
 import Produit from '../models/produitModel.js';
 import JournalCommande from '../models/journalCommandeModel.js';
 import { sendNotification } from '../services/notificationService.js';  // Importer le service de notification
-import PDFDocument from 'pdfkit';  // Importer pdfkit pour générer des PDF
-import ExcelJS from 'exceljs';     // Importer exceljs pour générer des fichiers Excel
-import { logUserActivity } from './activityLogController.js';  // Importer la fonction de journalisation
-
 
 // Middleware pour gérer les erreurs
 const handleError = (res, err, message = 'Erreur inconnue') => {
@@ -13,71 +9,258 @@ const handleError = (res, err, message = 'Erreur inconnue') => {
   return res.status(500).json({ success: false, message, error: err.message });
 };
 
+// Fonction pour récupérer les commandes spécifiques au MAGASIN
+export const getMagasinierOrders = async (req, res) => {
+  const userId = req.user.id; // ID de l'utilisateur connecté
+  try {
+    // Vérifier le rôle de l'utilisateur
+    if (req.user.role !== 'Magasinier') {
+      return res.status(403).json({ success: false, message: 'Accès refusé : vous devez être un magasinier pour voir les commandes.' });
+    }
+
+    // Récupérer les commandes pour le magasinier
+    const commandes = await Commande.find({ id_utilisateur: userId }).populate('produits.produit_id'); // Peupler les produits
+
+    res.status(200).json({ success: true, commandes });
+  } catch (err) {
+    handleError(res, err, 'Erreur lors de la récupération des commandes du magasinier');
+  }
+};
+
 // Créer une commande
 export const createCommande = async (req, res) => {
   const { produits } = req.body; // Obtenir les produits de la requête
 
   try {
+    // Log des produits reçus
+    console.log('Produits reçus:', produits);
+
     // Parcours des produits pour générer des identifiants si nécessaire
     const produitsAvecId = await Promise.all(
       produits.map(async (produit) => {
-        if (!produit.produit_id) {
-          // Si aucun identifiant de produit n'est fourni, créer un nouveau produit avec un identifiant généré automatiquement
+        // Vérifier que le nom, la quantité et le prix sont fournis
+        if (!produit.nom || !produit.quantite || produit.quantite < 1) {
+          throw new Error('Nom, quantité (minimum 1) et prix du produit sont requis.');
+        }
+
+        // Vérifier que le produit ID est valide ou créer un nouveau produit si nécessaire
+        if (produit.produit_id) {
+          // Vérification que l'ID du produit est valide
+          if (!mongoose.Types.ObjectId.isValid(produit.produit_id)) {
+            throw new Error(`ID de produit invalide : ${produit.produit_id}`);
+          }
+        } else {
+          // Créer un nouveau produit si pas d'ID
+          const produitExistant = await Produit.findOne({ nom: produit.nom });
+          if (produitExistant) {
+            throw new Error(`Un produit avec ce nom existe déjà : ${produit.nom}`);
+          }
+
           const nouveauProduit = new Produit({
             nom: produit.nom,
-            prix: produit.prix || null, // Le prix est facultatif
-            seuil_critique: produit.seuil_critique || 0, // Défaut pour seuil critique
+            prix: produit.prix,
+            seuil_critique: produit.seuil_critique || 10, // Utiliser un seuil critique par défaut si non fourni
           });
           await nouveauProduit.save();
           produit.produit_id = nouveauProduit._id; // Utiliser l'ID généré
         }
+
         return produit;
       })
     );
 
     // Créer une nouvelle commande
     const commande = new Commande({
-      id_utilisateur: req.user.id, // ID de l'utilisateur connecté
+      id_utilisateur: req.user.id,
       produits: produitsAvecId,
-      statut: 'Soumise', // Définir le statut à 'Soumise' lors de la création
+      statut: 'Soumise',
     });
 
-    await commande.calculerMontantTotal(); // Calculer le montant total avec les prix renseignés (ou 0 si non renseigné)
-    await commande.save(); // Enregistrer la commande dans la base de données
+    // Calcul du montant total
+    await commande.calculerMontantTotal();
 
-    // Journaliser la création de la commande
-    await logUserActivity(req.user.id, 'Création de commande', `Commande ID: ${commande._id}`);
-
+    // Enregistrer la commande
+    await commande.save();
 
     res.status(201).json({ success: true, message: 'Commande créée avec succès', commande });
   } catch (err) {
-    handleError(res, err, 'Erreur lors de la création de la commande');
+    // Log de l'erreur
+    console.error('Erreur complète:', err);
+    return res.status(400).json({ success: false, message: err.message });
   }
 };
 
-
 // Récupérer les commandes
 export const getCommandes = async (req, res) => {
-  const userId = req.user.id; // ID de l'utilisateur connecté
   try {
     const role = req.user.role;
-    let commandes;
 
     if (role === 'Magasinier') {
-      commandes = await Commande.find({ id_utilisateur: userId });
+      return getMagasinierOrders(req, res); // Rediriger vers la fonction spécifique
     } else if (role === 'Comptable') {
-      commandes = await Commande.find({ statut: 'Soumise' });
+      return getComptableOrders(req, res); // Rediriger vers la fonction spécifique
     } else {
       return res.status(403).json({ success: false, message: 'Accès refusé' });
     }
-
-    res.status(200).json({ success: true, commandes });
   } catch (err) {
     handleError(res, err, 'Erreur lors de la récupération des commandes');
   }
 };
 
+// Valider une commande 
+export const validateCommande = async (req, res) => {
+  const { id } = req.params; // ID de la commande
+  const { commentaire, action } = req.body; // Commentaire et action (valider/rejeter)
 
+  try {
+    // Vérification du rôle de l'utilisateur
+    if (req.user.role !== 'Comptable') {
+      return res.status(403).json({ success: false, message: 'Accès refusé : vous devez être un comptable pour valider les commandes.' });
+    }
+
+    // Récupérer la commande par ID
+    const commande = await Commande.findById(id);
+    if (!commande) {
+      return res.status(404).json({ success: false, message: 'Erreur : commande non trouvée avec cet ID.' });
+    }
+
+    const ancienStatut = commande.statut;
+
+    // Logique stricte pour les transitions de statuts
+    if (commande.statut === 'En révision' && action === 'valider') {
+      return res.status(400).json({ success: false, message: 'Erreur : la commande doit être resoumise avant validation.' });
+    }
+
+    if (action === 'valider') {
+      if (commande.statut !== 'Soumise') {
+        return res.status(400).json({ success: false, message: 'Erreur : seules les commandes soumises peuvent être validées.' });
+      }
+      commande.statut = 'Validée';
+      commande.commentaire = commentaire || ''; // Optionnel, en cas de commentaire
+
+    } else if (action === 'rejeter') {
+      if (commande.statut !== 'Soumise') {
+        return res.status(400).json({ success: false, message: 'Erreur : seules les commandes soumises peuvent être rejetées.' });
+      }
+      commande.statut = 'Rejetée';
+      commande.commentaire = commentaire || ''; // Ajouter un commentaire si fourni
+    } else if (action === 'reviser') {
+      if (commande.statut !== 'Rejetée') {
+        return res.status(400).json({ success: false, message: 'Erreur : seules les commandes rejetées peuvent être renvoyées pour révision.' });
+      }      
+      commande.statut = 'En révision'; // Changement de statut
+      if (commentaire) {
+        commande.commentaire = commentaire; // Ajouter le commentaire pour la révision
+      }
+    } else {
+      return res.status(400).json({ success: false, message: 'Erreur : action non valide.' });
+    }
+
+    // Enregistrer les changements
+    await commande.save();
+
+    // Journaliser l'action
+    const journalEntry = new JournalCommande({
+      commandeId: commande._id,
+      utilisateurId: req.user.id,
+      ancienStatut: ancienStatut,
+      nouveauStatut: commande.statut,
+      commentaire: commentaire || '',
+      dateChangement: new Date()
+    });
+    await journalEntry.save(); // Sauvegarder l'entrée du journal
+
+    return res.status(200).json({ success: true, message: 'Commande mise à jour avec succès.', commande });
+  } catch (err) {
+    handleError(res, err, 'Erreur lors de la validation de la commande');
+  }
+};
+
+// Fonction pour récupérer les commandes spécifiques au COMPTABLE
+export const getComptableOrders = async (req, res) => {
+  try {
+    // Vérifier le rôle de l'utilisateur
+    if (req.user.role !== 'Comptable') {
+      return res.status(403).json({ success: false, message: 'Accès refusé : vous devez être un comptable pour voir les commandes.' });
+    }
+
+    // Récupérer les commandes avec statut "Rejetée et Validée"
+    const commandes = await Commande.find({ statut: { $in: ['Rejetée', 'Validée'] } }).populate('produits.produit_id'); // Peupler les produits
+
+    res.status(200).json({ success: true, commandes });
+  } catch (err) {
+    handleError(res, err, 'Erreur lors de la récupération des commandes du comptable');
+  }
+};
+
+
+// Fonction pour annuler une commande
+export const cancelOrderMagasin = async (req, res) => {
+  const { id } = req.params; // Récupérer l'ID de la commande
+  const { commentaire } = req.body; // Récupérer le commentaire de l'annulation
+
+  try {
+    const commande = await Commande.findById(id);
+    if (!commande) {
+      return res.status(404).json({ success: false, message: 'Commande non trouvée.' });
+    }
+
+    if (commande.statut !== 'Soumise' && commande.statut !== 'Rejetée') {
+      return res.status(400).json({ success: false, message: 'La commande ne peut être annulée que si elle est soumise ou rejetée.' });
+    }
+
+    commande.statut = 'Annulée';
+    commande.commentaireAnnulation = commentaire; // Ajouter le commentaire
+    await commande.save();
+
+    res.status(200).json({ success: true, message: 'Commande annulée avec succès.', commande });
+  } catch (err) {
+    handleError(res, err, 'Erreur lors de l\'annulation de la commande');
+  }
+};
+
+
+// Fonction pour modifier une commande
+export const modifyOrderMagasin = async (req, res) => {
+  const { id } = req.params; // Récupérer l'ID de la commande
+  const { produits } = req.body; // Récupérer les nouveaux produits de la requête
+
+  try {
+    // Vérifier que la commande existe
+    const commande = await Commande.findById(id);
+    if (!commande) {
+      return res.status(404).json({ success: false, message: 'Commande non trouvée.' });
+    }
+
+    // Vérifier le statut de la commande
+    if (commande.statut !== 'Soumise' && commande.statut !== 'Rejetée') {
+      return res.status(400).json({ success: false, message: 'La commande ne peut être modifiée que si elle est soumise ou rejetée.' });
+    }
+
+    // Mettre à jour les produits de la commande
+    commande.produits = produits; // Remplacer les produits actuels par les nouveaux
+    await commande.save();
+
+    res.status(200).json({ success: true, message: 'Commande mise à jour avec succès.', commande });
+  } catch (err) {
+    handleError(res, err, 'Erreur lors de la mise à jour de la commande');
+  }
+};
+
+
+
+export default {
+  createCommande,
+  getCommandes,
+  validateCommande,
+  getMagasinierOrders, // Ajouter la nouvelle fonction ici
+  getComptableOrders,
+  cancelOrderMagasin,
+  modifyOrderMagasin,
+};
+
+
+/*
 // US 10 : Consultation de l'historique des commandes pour le magasinier
 export const getCommandesHistorique = async (req, res) => {
   const { statut, produit, dateDebut, dateFin } = req.query; // Filtrage par statut, produit ou période
@@ -317,79 +500,6 @@ export const generateCommandeExcel = async (req, res) => {
 };
 
 
-// Valider une commande
-export const validateCommande = async (req, res) => {
-  const { id } = req.params;
-  const { commentaire, action } = req.body;
-
-  try {
-    if (req.user.role !== 'Comptable') {
-      return res.status(403).json({ success: false, message: 'Accès refusé' });
-    }
-
-    const commande = await Commande.findById(id);
-    if (!commande) {
-      return res.status(404).json({ success: false, message: 'Commande non trouvée' });
-    }
-
-    const ancienStatut = commande.statut;
-
-    // Logique stricte pour les transitions de statuts
-    if (commande.statut === 'En révision' && action === 'valider') {
-      return res.status(400).json({ success: false, message: 'La commande doit être resoumise avant validation.' });
-    }
-
-    if (action === 'valider') {
-      if (commande.statut !== 'Soumise') {
-        return res.status(400).json({ success: false, message: 'Seules les commandes soumises peuvent être validées.' });
-      }
-      commande.statut = 'Validée';
-    } else if (action === 'rejeter') {
-      if (commande.statut !== 'Soumise') {
-        return res.status(400).json({ success: false, message: 'Seules les commandes soumises peuvent être rejetées.' });
-      }
-      commande.statut = 'Rejetée';
-    } else if (action === 'reviser') {
-      if (commande.statut !== 'Soumise') {
-        return res.status(400).json({ success: false, message: 'Seules les commandes soumises peuvent être envoyées en révision.' });
-      }
-      commande.statut = 'En révision';
-      if (commentaire) {
-        commande.commentaire = commentaire; // Ajouter le commentaire pour la révision
-      }
-
-      // Envoyer une notification au magasinier
-      const magasinier = await User.findById(commande.id_utilisateur);  // Récupérer le magasinier
-      await sendNotification(
-        magasinier.email,  // Email du magasinier
-        'Commande en révision',
-        `Votre commande avec l'ID ${commande._id} a été renvoyée pour révision. Commentaire: ${commentaire}`
-      );
-    } else {
-      return res.status(400).json({ success: false, message: 'Action non valide' });
-    }
-
-    await commande.save();
-
-    // Journalisation du changement de statut
-    const journalEntry = new JournalCommande({
-      commandeId: commande._id,
-      utilisateurId: req.user.id, // Utilisateur ayant effectué l'action
-      ancienStatut: ancienStatut,
-      nouveauStatut: commande.statut,
-      commentaire: commentaire || '',
-      dateChangement: new Date()
-    });
-
-    await journalEntry.save(); // Sauvegarder l'entrée du journal
-
-    res.status(200).json({ success: true, message: 'Commande mise à jour avec succès', commande });
-  } catch (err) {
-    handleError(res, err, 'Erreur lors de la validation de la commande');
-  }
-};
-
-
 export const generateRapportParPeriode = async (req, res) => {
   const { dateDebut, dateFin } = req.query;
 
@@ -454,3 +564,5 @@ export const getStatistiquesCommandes = async (req, res) => {
     handleError(res, err, 'Erreur lors de la récupération des statistiques des commandes');
   }
 };
+
+*/

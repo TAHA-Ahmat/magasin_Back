@@ -15,6 +15,9 @@ export const addStock = async (req, res) => {
   const { id_produit, quantite } = req.body;
 
   try {
+    if (!mongoose.Types.ObjectId.isValid(id_produit)) {
+      return res.status(400).json({ message: 'ID de produit invalide.' });
+    }
     const produit = await Produit.findById(id_produit);
     if (!produit) {
       return res.status(404).json({ message: 'Produit non trouvé.' });
