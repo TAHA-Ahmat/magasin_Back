@@ -222,30 +222,75 @@ export const cancelOrderMagasin = async (req, res) => {
 
 // Fonction pour modifier une commande
 export const modifyOrderMagasin = async (req, res) => {
-  const { id } = req.params; // Récupérer l'ID de la commande
-  const { produits } = req.body; // Récupérer les nouveaux produits de la requête
-
   try {
-    // Vérifier que la commande existe
-    const commande = await Commande.findById(id);
+    const { id } = req.params;  // ID de la commande à modifier
+    const { produits, montant_total, nom_produit, prix_produit } = req.body;  // Informations à modifier
+
+    // Trouver la commande par ID et peupler les informations des produits associés
+    const commande = await Commande.findById(id).populate('produits.produit_id');
     if (!commande) {
       return res.status(404).json({ success: false, message: 'Commande non trouvée.' });
     }
 
-    // Vérifier le statut de la commande
+    // Vérifier le statut de la commande : ne modifier que si Soumise ou Rejetée
     if (commande.statut !== 'Soumise' && commande.statut !== 'Rejetée') {
       return res.status(400).json({ success: false, message: 'La commande ne peut être modifiée que si elle est soumise ou rejetée.' });
     }
 
-    // Mettre à jour les produits de la commande
-    commande.produits = produits; // Remplacer les produits actuels par les nouveaux
+    // Mise à jour des produits si présents
+    if (produits) {
+      for (const produitModifie of produits) {
+        // Trouver le produit dans la commande par son ID
+        const produitIndex = commande.produits.findIndex((p) => p.produit_id._id.toString() === produitModifie.produit_id);
+        if (produitIndex > -1) {
+          // Mettre à jour la quantité
+          commande.produits[produitIndex].quantite = produitModifie.quantite || commande.produits[produitIndex].quantite;
+        }
+      }
+      commande.markModified('produits');  // Marquer les produits comme modifiés
+    }
+
+    // Mettre à jour le montant total de la commande si présent
+    if (montant_total) {
+      commande.montant_total = montant_total;
+    }
+
+    // Mise à jour des informations du produit (nom ou prix)
+    if (nom_produit || prix_produit) {
+      for (const produitModifie of produits) {
+        // Trouver le produit dans le modèle Produit
+        const produit = await Produit.findById(produitModifie.produit_id);
+        if (produit) {
+          // Mettre à jour le nom et/ou le prix du produit
+          produit.nom = nom_produit || produit.nom;
+          produit.prix = prix_produit || produit.prix;
+
+          // Sauvegarder les modifications du produit
+          await produit.save();
+
+          // Recalculer le montant total de la commande associée au produit modifié
+          await commande.calculerMontantTotal();  // Appeler la méthode pour recalculer le montant total
+        }
+      }
+    } else {
+      // Si aucun produit n'est modifié, recalculer le montant total avec les informations actuelles
+      await commande.calculerMontantTotal();
+    }
+
+    // Sauvegarder la commande modifiée
     await commande.save();
 
-    res.status(200).json({ success: true, message: 'Commande mise à jour avec succès.', commande });
+    // Renvoyer la commande avec les informations des produits peuplées
+    const commandePeuplee = await Commande.findById(commande._id).populate('produits.produit_id');
+
+    res.status(200).json({ success: true, message: 'Commande mise à jour avec succès.', commande: commandePeuplee });
   } catch (err) {
-    handleError(res, err, 'Erreur lors de la mise à jour de la commande');
+    console.error('Erreur lors de la mise à jour de la commande:', err);
+    res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour de la commande', error: err.message });
   }
 };
+
+
 
 
 
